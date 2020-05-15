@@ -1,0 +1,275 @@
+package devices
+
+import (
+	"go_code/powerflow/dae"
+	"go_code/powerflow/settings"
+	"math"
+	"math/cmplx"
+)
+
+type Syn6 struct {
+	BaseDevice
+	bus            []string
+	//由表格导入的常数
+	sn,vn,fn,xl,ra,xd,xd1,xd2,td1,td2,xq,xq1,xq2,tq1,tq2,M,D,taa,gammaP,gammaQ,state[]float64
+	//状态变量(索引)
+	Delta,Omega,Eq1,Ed1,Ed2,Eq2   []int
+	//代数变量(索引)
+	Vf,Pm,P,Q,p,q []int
+
+	//内部变量
+	%(internalVListCode) []float64
+}
+
+func (syn6 * Syn6) Initial(dae *dae.Dae, set *settings.Settings) {
+	syn6.BaseDevice.Initial(dae, set)
+	syn6.deviceType ="Syn6"
+	syn6.stOrder = []string{"Delta","Omega","Eq1","Ed1","Ed2","Eq2"}
+	syn6.alOrder = []string{"Vf","Pm","P","Q","p","q"}
+
+	syn6.pVarS["name"] = &syn6.Name
+	syn6.pVarS["bus"] = &syn6.bus
+
+	syn6.pVarF["sn"]=&syn6.sn
+	syn6.pVarF["vn"]=&syn6.vn
+	syn6.pVarF["fn"]=&syn6.fn
+	syn6.pVarF["xl"]=&syn6.xl
+	syn6.pVarF["ra"]=&syn6.ra
+	syn6.pVarF["xd"]=&syn6.xd
+	syn6.pVarF["xd1"]=&syn6.xd1
+	syn6.pVarF["xd2"]=&syn6.xd2
+	syn6.pVarF["td1"]=&syn6.td1
+	syn6.pVarF["td2"]=&syn6.td2
+	syn6.pVarF["xq"]=&syn6.xq
+	syn6.pVarF["xq1"]=&syn6.xq1
+	syn6.pVarF["xq2"]=&syn6.xq2
+	syn6.pVarF["tq1"]=&syn6.tq1
+	syn6.pVarF["tq2"]=&syn6.tq2
+	syn6.pVarF["M"]=&syn6.M
+	syn6.pVarF["D"]=&syn6.D
+	syn6.pVarF["taa"]=&syn6.taa
+	syn6.pVarF["gammaP"]=&syn6.gammaP
+	syn6.pVarF["gammaQ"]=&syn6.gammaQ
+	syn6.pVarF["state"]=&syn6.state
+
+	syn6.pVarSt["Delta"]=&syn6.Delta
+	syn6.pVarSt["Omega"]=&syn6.Omega
+	syn6.pVarSt["Eq1"]=&syn6.Eq1
+	syn6.pVarSt["Ed1"]=&syn6.Ed1
+	syn6.pVarSt["Ed2"]=&syn6.Ed2
+	syn6.pVarSt["Eq2"]=&syn6.Eq2
+
+	syn6.pVarAl["Vf"]=&syn6.Vf
+	syn6.pVarAl["Pm"]=&syn6.Pm
+	syn6.pVarAl["P"]=&syn6.P
+	syn6.pVarAl["Q"]=&syn6.Q
+	syn6.pVarAl["p"]=&syn6.p
+	syn6.pVarAl["q"]=&syn6.q
+
+
+
+}
+
+func (syn6 * Syn6) Add(f map[string]float64, s map[string]string) {
+	syn6.BaseDevice.Add(f, s)
+	syn6.state = append(syn6.state, 1)
+	syn6.gammaP = append(syn6.gammaP, 1)
+	syn6.gammaQ = append(syn6.gammaQ, 1)
+	syn6.sn=append(syn6.sn,0)
+	syn6.vn=append(syn6.vn,0)
+	syn6.fn=append(syn6.fn,0)
+	syn6.xl=append(syn6.xl,0)
+	syn6.ra=append(syn6.ra,0)
+	syn6.xd=append(syn6.xd,0)
+	syn6.xd1=append(syn6.xd1,0)
+	syn6.xd2=append(syn6.xd2,0)
+	syn6.td1=append(syn6.td1,0)
+	syn6.td2=append(syn6.td2,0)
+	syn6.xq=append(syn6.xq,0)
+	syn6.xq1=append(syn6.xq1,0)
+	syn6.xq2=append(syn6.xq2,0)
+	syn6.tq1=append(syn6.tq1,0)
+	syn6.tq2=append(syn6.tq2,0)
+	syn6.M=append(syn6.M,0)
+	syn6.D=append(syn6.D,0)
+	syn6.taa=append(syn6.taa,0)
+	syn6.gammaP=append(syn6.gammaP,0)
+	syn6.gammaQ=append(syn6.gammaQ,0)
+	syn6.state=append(syn6.state,0)
+
+}
+
+
+func (syn6 *Syn6) SetX0() {
+	for i:=0; i<syn6.N; i++ {
+
+		// 1.根据设备的不同情况进行预处理
+		// 2.计算常量
+		//代数变量索引
+		//运算关系转化
+		s:=complex(syn6.pDae.Y[syn6.P[i]],-syn6.pDae.Y[syn6.Q[i]])
+		v0:=complex(V0,0)
+		va:=cmplx.Exp(complex(0,Va))
+		v:= v0*va
+		c:=cmplx.Conj( s/((v)) )
+		delta:=cmplx.Phase(complex(c*syn6.ra[i] + v,syn6.xq[i]))
+		angle:= math.Pi/2-delta
+		vdq:=cmplx.Exp(complex(0,angle*syn6.state[i]*v))
+		idq:=cmplx.Exp(complex(0,angle*c*syn6.state[i]))
+		vd:=real( (vdq) )
+		vq:=imag( (vdq) )
+		id:=real( (idq) )
+		iq:=imag( (idq) )
+		pm0:= id*(vd+id*syn6.ra[i])+iq*(vq+iq*syn6.ra[i])
+		c0:= 1/((syn6.ra[i]*syn6.ra[i])+syn6.xd2[i]*syn6.xq2[i])
+		k0:= syn6.td2[i]*syn6.xd2[i]*(syn6.xd[i]-syn6.xd1[i])/(syn6.td1[i]*syn6.xd1[i])
+		k1:= syn6.xd[i]-syn6.xd1[i]-k0
+		k2:= syn6.xd1[i]-syn6.xd2[i]+k0
+		k3:= syn6.tq2[i]*syn6.xq2[i]*(syn6.xq[i]-syn6.xq1[i])/(syn6.tq1[i]*syn6.xq1[i])
+		eq2:= vq+iq*syn6.ra[i]+id*syn6.xd2[i]
+		k4:= syn6.taa[i]*((k1+k2)*id+eq2)/(syn6.td1[i])
+		eq1:= eq2+k2*id-k4
+		vf:= (k1*id+eq1)/(1-syn6.taa[i]/(syn6.td1[i]))
+		syn6.pDae.Y[syn6.P[i]]= syn6.state[i]*P_b*syn6.gammaP[i]
+		syn6.pDae.Y[syn6.Q[i]]= syn6.state[i]*Q_b*syn6.gammaQ[i]
+		syn6.pDae.X[syn6.Delta[i]]= syn6.state[i]*syn6.pDae.X[syn6.Delta[i]]
+		syn6.pDae.Y[syn6.Pm[i]]= pm0
+		C1:= syn6.ra[i]*c0
+		C2:= syn6.xd2[i]*c0
+		C3:= syn6.xq2[i]*c0
+		syn6.pDae.X[syn6.Eq2[i]]= eq2
+		syn6.pDae.X[syn6.Ed1[i]]= id*(syn6.xq[i]-syn6.xq1[i]-k3)
+		syn6.pDae.X[syn6.Eq1[i]]= eq1
+		Vf0:= vf
+		syn6.pDae.Y[syn6.Vf[i]]= vf
+		syn6.pDae.X[syn6.Omega[i]]= syn6.state[i]
+
+	}
+}
+
+
+func (syn6 *Syn6) CalG() {
+	for i:=0; i<syn6.N; i++ {
+		// 1.计算代数方程
+		// 2.赋值
+		Delta:=syn6.pDae.X[syn6.Delta[i]]
+		Ed2:=syn6.pDae.X[syn6.Ed2[i]]
+		Eq2:=syn6.pDae.X[syn6.Eq2[i]]
+		Vf:=syn6.pDae.Y[syn6.Vf[i]]
+		Pm:=syn6.pDae.Y[syn6.Pm[i]]
+		P:=syn6.pDae.Y[syn6.P[i]]
+		Q:=syn6.pDae.Y[syn6.Q[i]]
+
+		vd:=math.Sin( V0*(Delta-Va) )
+		vq:=math.Cos( v0*(Delta-Va) )
+		c0:= 1/(syn6.ra[i]*syn6.ra[i])+syn6.xd2[i]*syn6.xq2[i]
+		c1:= syn6.ra[i]*c0
+		c2:= syn6.xd2[i]*c0
+		c3:= syn6.xq2[i]*c0
+		Id:= (Ed2-vd)*c1+(Eq2-vq)*c3
+		Iq:= (vd-Ed2)*c2+(Eq2-vq)*c1
+		syn6.pDae.G[syn6.Vf[i]]+= Vf0-Vf
+		syn6.pDae.G[syn6.Pm[i]]+= Pm0-Pm
+		syn6.pDae.G[syn6.P[i]]+= vd*Id+vq*Iq-P
+		syn6.pDae.G[syn6.Q[i]]+= vq*Id-vd*Iq-Q
+		syn6.pDae.G[syn6.p[i]]+= -P
+		syn6.pDae.G[syn6.q[i]]+= -Q
+
+
+	}
+}
+
+func (syn6 *Syn6) CalF() {
+	for i:=0; i<syn6.N; i++ {
+		//1. 将DAE中的值提取到变量中
+		//2. 计算更新状态方程的值
+		//3. 更新DAE
+		Omega:=syn6.pDae.X[syn6.Omega[i]]
+		Pm:=syn6.pDae.Y[syn6.Pm[i]]
+		P:=syn6.pDae.Y[syn6.P[i]]
+		Eq1:=syn6.pDae.X[syn6.Eq1[i]]
+		Vf:=syn6.pDae.Y[syn6.Vf[i]]
+		Ed1:=syn6.pDae.X[syn6.Ed1[i]]
+		Ed2:=syn6.pDae.X[syn6.Ed2[i]]
+		Eq2:=syn6.pDae.X[syn6.Eq2[i]]
+
+		gd:= syn6.xd2[i]*syn6.td2[i]*(syn6.xd[i]-syn6.xd1[i])/(syn6.xd1[i]*syn6.td1[i])
+		gq:= syn6.xq2[i]*syn6.tq2[i]*(syn6.xq[i]-syn6.xq1[i])/(syn6.xq1[i]*syn6.tq1[i])
+		a1:= 1/(syn6.td2[i])
+		a2:= a1*(syn6.xd1[i]-syn6.xd2[i]+gd)
+		a3:= syn6.taa[i]/(syn6.td1[i]*syn6.td2[i])
+		a4:= 1/(syn6.td1[i])
+		a5:= a4*(syn6.xd[i]-syn6.xd1[i]-gd)
+		a6:= a4*(1-syn6.taa[i]/syn6.td1[i])
+		b1:= 1/(syn6.tq2[i])
+		b2:= b1*(syn6.xq1[i]-syn6.xq2[i]+gq)
+		b3:= 1/(syn6.tq1[i])
+		b4:= b3*(syn6.xq[i]-syn6.xq1[i]-gq)
+		syn6.pDae.X[syn6.Delta[i]]= 2*math.Pi*f*(Omega-1)
+		syn6.pDae.X[syn6.Omega[i]]= (Pm-P-syn6.ra[i]*(Iq*Iq+Id*Iq)-syn6.D[i]*(Omega-1))/(syn6.M[i])
+		syn6.pDae.X[syn6.Eq1[i]]= -a4*Eq1-a5*Id+a6*Vf
+		syn6.pDae.X[syn6.Ed1[i]]= -b3*Ed1+b4*Iq
+		syn6.pDae.X[syn6.Ed2[i]]= -b1*Ed2+b1*Ed1+b2*Iq
+		syn6.pDae.X[syn6.Eq2[i]]= -a1*Eq2+a1*Eq1-a2*Id+a3*Vf
+
+
+	}
+}
+
+func (syn6 *Syn6) CalGy() {
+	for i:=0; i<syn6.N; i++ {
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Vf[i],syn6.Vf[i],-1)
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Pm[i],syn6.Pm[i],-1)
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.P[i],syn6.Delta[i],Ed2*V0*c1*cos(Delta - Va) + Ed2*c2*v0*sin(Delta - Va) + Eq2*V0*c3*cos(Delta - Va) - Eq2*c1*v0*sin(Delta - Va) - V0*c1*vd*cos(Delta - Va) + V0*c3*v0*sin(Delta - Va)**2 - V0*c3*v0*cos(Delta - Va)**2 + c1*v0*vq*sin(Delta - Va) - c2*v0*vd*sin(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.P[i],syn6.Ed2[i],V0*c1*sin(Delta - Va) - c2*v0*cos(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.P[i],syn6.Eq2[i],V0*c3*sin(Delta - Va) + c1*v0*cos(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.P[i],syn6.Delta[i],Ed2*V0*c1*cos(Delta - Va) + Ed2*c2*v0*sin(Delta - Va) + Eq2*V0*c3*cos(Delta - Va) - Eq2*c1*v0*sin(Delta - Va) - V0*c1*vd*cos(Delta - Va) + V0*c3*v0*sin(Delta - Va)**2 - V0*c3*v0*cos(Delta - Va)**2 + c1*v0*vq*sin(Delta - Va) - c2*v0*vd*sin(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.P[i],syn6.Delta[i],Ed2*V0*c1*cos(Delta - Va) + Ed2*c2*v0*sin(Delta - Va) + Eq2*V0*c3*cos(Delta - Va) - Eq2*c1*v0*sin(Delta - Va) - V0*c1*vd*cos(Delta - Va) + V0*c3*v0*sin(Delta - Va)**2 - V0*c3*v0*cos(Delta - Va)**2 + c1*v0*vq*sin(Delta - Va) - c2*v0*vd*sin(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.P[i],syn6.Ed2[i],V0*c1*sin(Delta - Va) - c2*v0*cos(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.P[i],syn6.Eq2[i],V0*c3*sin(Delta - Va) + c1*v0*cos(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.P[i],syn6.P[i],-1)
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Q[i],syn6.Delta[i],Ed2*V0*c2*cos(Delta - Va) - Ed2*c1*v0*sin(Delta - Va) - Eq2*V0*c1*cos(Delta - Va) - Eq2*c3*v0*sin(Delta - Va) + V0*c1*v0*sin(Delta - Va)**2 - V0*c1*v0*cos(Delta - Va)**2 + V0*c1*vq*cos(Delta - Va) - V0*c2*vd*cos(Delta - Va) + c3*v0*vq*sin(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Q[i],syn6.Ed2[i],V0*c2*sin(Delta - Va) + c1*v0*cos(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Q[i],syn6.Delta[i],Ed2*V0*c2*cos(Delta - Va) - Ed2*c1*v0*sin(Delta - Va) - Eq2*V0*c1*cos(Delta - Va) - Eq2*c3*v0*sin(Delta - Va) + V0*c1*v0*sin(Delta - Va)**2 - V0*c1*v0*cos(Delta - Va)**2 + V0*c1*vq*cos(Delta - Va) - V0*c2*vd*cos(Delta - Va) + c3*v0*vq*sin(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Q[i],syn6.Eq2[i],-V0*c1*sin(Delta - Va) + c3*v0*cos(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Q[i],syn6.Delta[i],Ed2*V0*c2*cos(Delta - Va) - Ed2*c1*v0*sin(Delta - Va) - Eq2*V0*c1*cos(Delta - Va) - Eq2*c3*v0*sin(Delta - Va) + V0*c1*v0*sin(Delta - Va)**2 - V0*c1*v0*cos(Delta - Va)**2 + V0*c1*vq*cos(Delta - Va) - V0*c2*vd*cos(Delta - Va) + c3*v0*vq*sin(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Q[i],syn6.Ed2[i],V0*c2*sin(Delta - Va) + c1*v0*cos(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Q[i],syn6.Eq2[i],-V0*c1*sin(Delta - Va) + c3*v0*cos(Delta - Va))
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.Q[i],syn6.Q[i],-1)
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.p[i],syn6.P[i],-1)
+		syn6.DenseAdd(syn6.pDae.Gy,syn6.q[i],syn6.Q[i],-1)
+
+	}
+}
+
+func (syn6 *Syn6) CalFx() {
+	for i:=0; i<syn6.N; i++ {
+		//1. 将DAE中的值提取到变量中
+		%(calFxCode1)
+
+	}
+}
+//根据实际的母线基准值标幺化
+//func (syn6 *Syn6) Base() {
+//	for i:=0; i<template.N; i++ {
+//		vb := template.pBus.Vb[template.pBus.index[template.bus[i]]]
+//		sb := template.pSettings.Mva
+//		zb := vb * vb / sb
+//
+//		//template.xd[i] /= zb
+//		//template.xd1[i] /= zb
+//		//template.xd2[i] /= zb
+//
+//	}
+//}
+
+
+//func (syn6 *Syn6) BusIndex() {
+//	for _, eachBus := range template.bus {
+//		//busNum:母线名称对应的编号
+//		busNum := template.pBus.index[eachBus]
+//		template.Va = append(template.Va, template.pBus.va[busNum])
+//		template.V0 = append(template.V0, template.pBus.v0[busNum])
+//	}
+//}
+//
